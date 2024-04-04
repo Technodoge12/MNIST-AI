@@ -1,6 +1,11 @@
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+import tkinter as tk
+from tkinter import messagebox
+from PIL import Image, ImageDraw, ImageOps
+from skimage.filters import threshold_otsu, threshold_mean
+import cv2
 
 data = pd.read_csv('./train.csv')
 
@@ -16,7 +21,17 @@ X_dev = X_dev / 255
 data_train = data[1000:m].T
 Y_train = data_train[0]
 X_train = data_train[1:n]
+
+def binarize_images(images):
+    threshold_value = 128
+    binarized_images = np.where(images > threshold_value, 255, 0)
+    return binarized_images
+
+# Apply thresholding to training data
+X_train_binarized = binarize_images(X_train)
 X_train = X_train / 255
+X_train_binarized = X_train_binarized / 255
+X_train = X_train_binarized
 
 
 def init_params():
@@ -95,7 +110,7 @@ def gradient_descent(X, Y, iterations, alpha):
             print("")
     return W1, b1, W2, b2
 
-W1, b1, W2, b2 = gradient_descent(X_train, Y_train, 500, 0.1)
+W1, b1, W2, b2 = gradient_descent(X_train, Y_train, 2500, 0.2)
 
 _, m_train = X_train.shape
 
@@ -118,10 +133,67 @@ def test_prediction(index, W1, b1, W2, b2):
     plt.imshow(current_image, interpolation='nearest')
     plt.show()
 
-test_prediction(0, W1, b1, W2, b2)
-test_prediction(1, W1, b1, W2, b2)
-test_prediction(2, W1, b1, W2, b2)
-test_prediction(3, W1, b1, W2, b2)
+def draw_and_predict():
+    def motion(event):
+        x, y = event.x, event.y
+        r = 12
+        canvas.create_oval(x - r, y - r, x + r, y + r, fill="black")
+        draw.ellipse([x - r, y - r, x + r, y + r], fill="black")
 
-dev_predictions = make_predictions(X_train, W1, b1, W2, b2)
-get_accuracy(dev_predictions, Y_train)
+
+    def predict():
+        # Convert the drawn image to a format compatible with the model
+        image_resized = image.resize((28, 28))
+
+        # Convert the image to grayscale
+        image_resized_gray = image_resized.convert('L')
+
+        threshold_value = 128
+        image_array = np.array(image_resized_gray)
+        image_thresholded_array = np.where(image_array > threshold_value, 255, 0)
+
+        # Convert the thresholded array back to an image
+        image_thresholded = Image.fromarray(image_thresholded_array.astype('uint8'))
+
+        # Invert the colors
+        image_inverted = ImageOps.invert(image_thresholded)
+
+        # Plot the inverted image for debugging
+        # plt.gray()
+        # plt.imshow(image_inverted, interpolation='nearest')
+        # plt.title("Inverted Image")
+        # plt.show()
+
+        # Reshape the image to match the input shape
+        data = np.array(image_inverted) / 255.0
+        data = data.reshape((1, 784)).T
+
+        # Perform prediction using your model
+        prediction = make_predictions(data, W1, b1, W2, b2)
+        messagebox.showinfo("Prediction", f"The drawn number is: {prediction}")
+
+    popup = tk.Toplevel()
+    popup.title("Draw a Number")
+    canvas = tk.Canvas(popup, width=280, height=280, bg="white")
+    canvas.pack()
+
+
+    image = Image.new("L", (280, 280), "white")
+    draw = ImageDraw.Draw(image)
+
+
+    canvas.bind("<B1-Motion>", motion)
+
+
+    predict_button = tk.Button(popup, text="Predict", command=predict)
+    predict_button.pack()
+
+root = tk.Tk()
+root.title("Number Recognition")
+
+draw_button = tk.Button(root, text="Draw Number", command=draw_and_predict)
+draw_button.pack()
+
+root.mainloop()
+
+
